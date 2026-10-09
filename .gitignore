@@ -10,14 +10,15 @@ backend/.venv/
 # Dữ liệu sinh ra khi chạy
 backend/data/
 backend/eval/bench_log.txt
+backend/eval/triet_log.txt
+backend/eval/reports/*_chunks.json
 backend/tools/*.png
-
-# Frontend
-frontend/node_modules/
-frontend/.next/
-frontend/next-env.d.ts
 
 # Khác
 _to_delete/
 .DS_Store
 Thumbs.db
+
+# Tài liệu PDF dùng để test (bản quyền, dung lượng lớn): không đưa lên git
+/*.pdf
+backend/*.pdf

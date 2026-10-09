@@ -39,17 +39,19 @@ Chạy trên máy cá nhân: xem [01-huong-dan-chay-local.md](01-huong-dan-chay-
 ```
                          ┌──────────────────────── Server (Ubuntu + GPU NVIDIA) ────────────────────────┐
 Người dùng DocShelf ─┐   │                                                                              │
-                     ├─► │ Nginx :443 (HTTPS) ─┬─ /          ──► Next.js :3000 ──/api/*──┐               │
-Hệ thống ngoài ──────┘   │                     └─ /api/v1/*  ───────────────────────────►├► FastAPI :8000 │
- (server-to-server)      │                                                              │   (N worker)    │
-                         │                                                              ▼                 │
+                     ├─► │ Nginx :443 (HTTPS) ──► FastAPI :8000 (N worker)                              │
+Hệ thống ngoài ──────┘   │                          ├─ /          giao diện (frontend/*.html, css, js)    │
+ (server-to-server)      │                          ├─ /api/*     API cho giao diện DocShelf              │
+                         │                          └─ /api/v1/*  API cho hệ thống ngoài (API key)        │
                          │                    Postgres + pgvector (Docker, 127.0.0.1:5433)                │
                          │                    Ollama :11434 (GPU) — model trả lời + embedding             │
                          │                    /var/lib/docshelf/data — file PDF gốc                       │
                          └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Chỉ **Nginx** mở ra Internet (cổng 80/443). Next.js, FastAPI, Postgres, Ollama đều chỉ nghe ở `127.0.0.1`.
+Chỉ **Nginx** mở ra Internet (cổng 80/443). FastAPI, Postgres, Ollama đều chỉ nghe ở `127.0.0.1`.
+
+Giao diện là file tĩnh trong `frontend/`, do chính FastAPI phục vụ (cuối `app/main.py`): **không cần Node.js, không có bước build**.
 
 ## A2. Yêu cầu server
 
@@ -59,7 +61,7 @@ Chỉ **Nginx** mở ra Internet (cổng 80/443). Next.js, FastAPI, Postgres, Ol
 | GPU | NVIDIA, cài sẵn driver (`nvidia-smi` chạy được) | Quyết định tốc độ trả lời, xem A6–A7 |
 | RAM | 16GB | Mỗi worker backend nạp reranker riêng (~2–3GB nếu chạy CPU) |
 | Ổ đĩa | 50GB+ | Model Ollama 3–10GB mỗi cái + PDF + database |
-| Phần mềm | Docker, Python 3.12+, Node.js 20+, Ollama, Nginx | |
+| Phần mềm | Docker, Python 3.12+, Ollama, Nginx | |
 
 ## A3. Đưa những file nào lên server
 
@@ -70,9 +72,9 @@ Cách khuyến nghị: **push code lên GitHub (repo private), rồi `git clone`
 | `backend/app/` — mã nguồn | `backend/.venv/` — tạo lại bằng `python -m venv` |
 | `backend/alembic/`, `backend/alembic.ini` — migration | `backend/.env` — tạo mới với cấu hình production |
 | `backend/requirements.txt` | `backend/data/` — thư mục PDF (có thể chép riêng nếu muốn giữ dữ liệu cũ) |
-| `backend/tools/`, `backend/eval/` | `frontend/node_modules/` — `npm ci` |
-| `frontend/` (trừ node_modules, .next) | `frontend/.next/` — `npm run build` |
-| `docker-compose.yml`, `db/init/` | `.env` ở thư mục gốc (mật khẩu Postgres) |
+| `backend/tools/`, `backend/eval/` | `.env` ở thư mục gốc (mật khẩu Postgres) |
+| `frontend/` — giao diện HTML/CSS/JS, dùng nguyên như vậy | |
+| `docker-compose.yml`, `db/init/` | |
 | `docs/` | |
 
 Muốn chuyển cả dữ liệu từ máy local lên: sao lưu database (`pg_dump`, xem tài liệu 01 mục 9) + nén thư mục `backend/data`, chép lên server, khôi phục.
@@ -101,7 +103,7 @@ POSTGRES_PASSWORD=<mật khẩu mạnh, tạo bằng: openssl rand -base64 32>
 | `WARMUP` | `true` | `true` | Nạp sẵn model + tài liệu khi khởi động, người hỏi đầu tiên không phải chờ |
 | `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | 5, 10 | xem A6 | Số kết nối DB mỗi worker |
 
-**Frontend:** biến `BACKEND_URL` (mặc định `http://localhost:8000`) phải đặt **lúc build**, vì Next.js ghi địa chỉ chuyển tiếp `/api/*` vào bản build.
+**Frontend:** không có cấu hình riêng. Giao diện gọi API bằng đường dẫn tương đối (`/api/...`) trên cùng địa chỉ, nên chạy ở tên miền nào cũng đúng.
 
 ## A5. Các bước triển khai
 
@@ -112,7 +114,6 @@ Ví dụ: tên miền `docshelf.example.edu.vn`, user Linux `deploy`, code ở `
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-venv python3-pip nginx git
-# Node.js 20+: https://nodejs.org (hoặc nvm)
 # Docker: https://docs.docker.com/engine/install/ubuntu/
 sudo usermod -aG docker deploy        # đăng xuất / đăng nhập lại để có quyền dùng docker
 curl -fsSL https://ollama.com/install.sh | sh
@@ -181,37 +182,13 @@ journalctl -u docshelf-api -f          # xem log
 
 ### A5.4. Frontend
 
-```bash
-cd /opt/docshelf/frontend
-npm ci
-BACKEND_URL=http://127.0.0.1:8000 npm run build
-```
-
-Tạo `/etc/systemd/system/docshelf-web.service`:
-
-```ini
-[Unit]
-Description=DocShelf Web (Next.js)
-After=network.target docshelf-api.service
-
-[Service]
-User=deploy
-WorkingDirectory=/opt/docshelf/frontend
-Environment=NODE_ENV=production
-Environment=BACKEND_URL=http://127.0.0.1:8000
-ExecStart=/usr/bin/npm run start -- -p 3000 -H 127.0.0.1
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
+Không có bước nào: giao diện nằm sẵn trong `frontend/` và được `docshelf-api` phục vụ ở `/`. Kiểm tra:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now docshelf-web
+curl -I http://127.0.0.1:8000/login.html    # phải trả về 200
 ```
 
-(Quen PM2 thì dùng `pm2 start npm --name docshelf-web -- run start -- -p 3000 -H 127.0.0.1` cũng được.)
+Đặt giao diện ở chỗ khác thì khai báo biến môi trường `FRONTEND_DIR` trong file service.
 
 ### A5.5. Nginx + HTTPS
 
@@ -225,7 +202,7 @@ server {
     listen 80;
     server_name docshelf.example.edu.vn;
 
-    client_max_body_size 25m;          # upload PDF tối đa 20MB + phần đầu request
+    client_max_body_size 110m;         # upload PDF tối đa 100MB (MAX_UPLOAD_MB) + phần đầu request
 
     # Câu trả lời có thể mất 10–60 giây (LLM), upload + index có thể vài phút
     proxy_read_timeout 300s;
@@ -236,18 +213,19 @@ server {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
 
-    # API cho hệ thống ngoài: đi thẳng vào FastAPI
-    location /api/v1/chat {
+    # Hỏi đáp (giao diện + hệ thống ngoài): giới hạn tốc độ
+    location = /api/chat {
         limit_req zone=docshelf_chat burst=10 nodelay;
         proxy_pass http://127.0.0.1:8000;
     }
-    location /api/v1/ {
+    location = /api/v1/chat {
+        limit_req zone=docshelf_chat burst=10 nodelay;
         proxy_pass http://127.0.0.1:8000;
     }
 
-    # Giao diện DocShelf (Next.js tự chuyển /api/* sang FastAPI)
+    # Mọi thứ còn lại (giao diện, /api/*, /api/v1/*) đều do FastAPI phục vụ
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:8000;
     }
 }
 ```
@@ -408,10 +386,7 @@ git pull
 cd backend
 .venv/bin/pip install -r requirements.txt
 .venv/bin/alembic upgrade head            # nếu có thay đổi bảng
-sudo systemctl restart docshelf-api
-cd ../frontend
-npm ci && BACKEND_URL=http://127.0.0.1:8000 npm run build
-sudo systemctl restart docshelf-web
+sudo systemctl restart docshelf-api      # giao diện mới cũng có hiệu lực luôn
 ```
 
 **Sao lưu hằng ngày** — `crontab -e`:
@@ -544,7 +519,7 @@ Mọi request gửi kèm header `X-API-Key: dsk_...`. Địa chỉ gốc: `https
 
 | Trường | Bắt buộc | Mô tả |
 |---|---|---|
-| `file` | ✅ | File PDF, tối đa 20MB, PDF có chữ (bản scan cần OCR trước) |
+| `file` | ✅ | File PDF, tối đa 100MB (`MAX_UPLOAD_MB`), PDF có chữ (bản scan cần OCR trước) |
 | `title` | | Tên hiển thị; bỏ trống thì lấy tên file |
 
 ```bash
@@ -629,6 +604,8 @@ Response `200 OK`:
 | `citations[].page` | Số trang (bắt đầu từ 1) |
 | `citations[].section` | Mục / chương chứa câu trích |
 | `citations[].rects` | Vùng cần tô trên ảnh trang `[x0, y0, x1, y1]`, tỉ lệ 0..1 so với chiều rộng/cao trang (xem B7) |
+| `example` | Ví dụ minh họa do model **tự nghĩ** khi người dùng xin ví dụ / liên hệ thực tế; `null` nếu không có. **Không có trong tài liệu**: hiển thị tách riêng và ghi rõ nhãn |
+| `confidence` | Khi `found = true`: `high` = đoạn tìm được khớp rõ với câu hỏi; `medium` = khớp yếu hơn, nên khuyên người dùng mở nguồn đối chiếu |
 
 Thời gian trả lời: 5–30 giây tùy model và mức tải (xem A6). Đặt timeout phía X ≥ 120 giây.
 
@@ -665,7 +642,7 @@ Lỗi trả về dạng `{"detail": "thông báo tiếng Việt"}`.
 | 401 | Thiếu / sai API key, key đã bị thu hồi | Kiểm tra cấu hình key |
 | 404 | `doc_id` / `session_id` không tồn tại, của hệ thống khác, hoặc sai `user_ref` | Xóa liên kết cũ bên X nếu tài liệu đã bị xóa |
 | 409 | DocShelf vừa đổi model embedding, tài liệu chưa index lại | Báo quản trị DocShelf chạy `reindex` |
-| 413 | File > 20MB | Báo người dùng |
+| 413 | File > `MAX_UPLOAD_MB` (mặc định 100MB) | Báo người dùng |
 | 422 | PDF không trích được chữ (bản scan) hoặc thiếu trường bắt buộc | Báo người dùng cần PDF có chữ / OCR |
 | 429 | Gọi chat quá nhanh (giới hạn ở Nginx, A5.5) | Chờ rồi gửi lại |
 | 503 | Model AI (Ollama) không chạy | Thử lại sau, báo quản trị DocShelf |
@@ -776,7 +753,7 @@ Mỗi trích dẫn có `page` và `rects`. Hiện ảnh trang rồi phủ các k
 </div>
 ```
 
-`rects` rỗng nghĩa là không xác định được vị trí chính xác: vẫn hiện trang `page`, chỉ không tô. Có thể xem cách giao diện DocShelf làm trong `frontend/components/SourcePanel.tsx`.
+`rects` rỗng nghĩa là không xác định được vị trí chính xác: vẫn hiện trang `page`, chỉ không tô. Có thể xem cách giao diện DocShelf làm trong `frontend/assets/app.js` (các hàm `openSource`, `drawMarks`).
 
 ## B8. Lưu ý khi tích hợp
 

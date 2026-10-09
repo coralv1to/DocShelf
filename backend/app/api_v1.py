@@ -23,14 +23,14 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from . import chat_service, locate, pipeline, store
+from . import chat_service, config, locate, pipeline, store
 from .db import get_db
 from .models import ApiClient, ChatSession, Document
 
 router = APIRouter(prefix="/api/v1", tags=["Tích hợp (API key)"])
 
 ID_RE = re.compile(r"^[0-9a-f]{32}$")
-MAX_UPLOAD_MB = 20
+MAX_UPLOAD_MB = config.MAX_UPLOAD_MB
 
 DB = Annotated[Session, Depends(get_db)]
 
@@ -226,6 +226,11 @@ def chat(req: ChatIn, client: Client, db: DB):
         "refusal_kind": None if result["found"] else debug.get("refusal_kind"),
         "mode": debug.get("mode"),
         "citations": [_citation_out(c) for c in result["citations"]],
+        # Ví dụ minh họa do model tự nghĩ (KHÔNG có trong tài liệu) khi người dùng xin ví dụ; null nếu không có.
+        # Hệ thống ngoài nên hiển thị tách riêng và ghi rõ nhãn này.
+        "example": result.get("example"),
+        # high = đoạn tìm được khớp rõ với câu hỏi; medium = khớp yếu hơn, nên khuyên người dùng mở nguồn kiểm tra
+        "confidence": debug.get("confidence") if result["found"] else None,
     }
     if req.include_debug:
         out["debug"] = debug

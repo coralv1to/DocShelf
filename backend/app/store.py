@@ -118,6 +118,37 @@ def save_index(
     _cache[index.doc_id] = index
 
 
+def replace_chunks(index: DocumentIndex) -> None:
+    """Thay toàn bộ đoạn của một tài liệu ĐÃ CÓ (đọc lại PDF bằng bộ cắt đoạn mới).
+
+    Giữ nguyên doc_id, file PDF và các cuộc trò chuyện; chỉ thay bảng chunks.
+    """
+    tokens = index.get_tokens()
+    with SessionLocal() as db:
+        doc = db.get(Document, index.doc_id)
+        if doc is None:
+            raise ValueError(f"Không có tài liệu {index.doc_id}")
+        db.query(ChunkRow).filter(ChunkRow.document_id == index.doc_id).delete()
+        db.add_all([
+            ChunkRow(
+                document_id=index.doc_id,
+                position=pos,
+                chunk_key=c.id,
+                text=c.text,
+                header=c.header,
+                page_start=c.page_start,
+                page_end=c.page_end,
+                embedding=index.embeddings[pos],
+                search_tokens=" ".join(tokens[pos]),
+            )
+            for pos, c in enumerate(index.chunks)
+        ])
+        doc.num_chunks = len(index.chunks)
+        doc.embed_model = config.EMBED_MODEL
+        db.commit()
+    _cache[index.doc_id] = index
+
+
 def load_index(doc_id: str) -> DocumentIndex | None:
     if doc_id in _cache:
         return _cache[doc_id]

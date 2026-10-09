@@ -13,6 +13,8 @@
 
     python -m app.cli reindex --all                # embed lại mọi tài liệu sau khi đổi EMBED_MODEL
     python -m app.cli reindex --doc <doc_id>
+    python -m app.cli reparse --all                # đọc lại PDF gốc bằng bộ cắt đoạn mới (sau khi nâng cấp code)
+    python -m app.cli reparse --doc <doc_id>
 
 Mật khẩu được hỏi bằng getpass: gõ không hiện chữ, không lưu vào lịch sử lệnh.
 """
@@ -208,6 +210,28 @@ def reindex(args) -> None:
     print("Xong. Khởi động lại backend để bỏ cache cũ trong RAM.")
 
 
+def reparse(args) -> None:
+    """Đọc lại PDF gốc + cắt đoạn lại + embed lại. Giữ nguyên tài liệu và các cuộc trò chuyện."""
+    from . import pipeline
+
+    with SessionLocal() as db:
+        q = select(Document)
+        if args.doc:
+            q = q.where(Document.id == args.doc)
+        docs = db.scalars(q.order_by(Document.created_at)).all()
+    if not docs:
+        print("Không có tài liệu nào.")
+        return
+    print(f"Đọc lại {len(docs)} tài liệu...")
+    for doc in docs:
+        try:
+            index = pipeline.reparse_document(doc.id, doc.title)
+            print(f"  ✓ {doc.title}: {doc.num_chunks} -> {len(index.chunks)} đoạn")
+        except ValueError as e:
+            print(f"  ✗ {doc.title}: {e}")
+    print("Xong. Khởi động lại backend để bỏ cache cũ trong RAM.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli", description="Quản trị DocShelf")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -248,6 +272,12 @@ def main() -> None:
     g.add_argument("--doc", help="Một tài liệu theo doc_id")
     p.add_argument("--force", action="store_true", help="Cùng --all: embed lại cả tài liệu đã đúng model")
     p.set_defaults(func=reindex)
+
+    p = sub.add_parser("reparse", help="Đọc lại PDF gốc bằng bộ cắt đoạn mới (sau khi nâng cấp code)")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--all", action="store_true", help="Mọi tài liệu")
+    g.add_argument("--doc", help="Một tài liệu theo doc_id")
+    p.set_defaults(func=reparse)
 
     args = parser.parse_args()
     args.func(args)

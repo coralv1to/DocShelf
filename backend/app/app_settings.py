@@ -33,16 +33,27 @@ SPEC: dict[str, dict] = {
         "label": "Số đoạn đưa cho model",
         "help": "Số đoạn tốt nhất đưa cho model đọc để trả lời. Nhiều hơn: đủ ngữ cảnh hơn nhưng model đọc lâu hơn.",
     },
-    "min_vector_score": {
-        "type": "float", "min": 0.0, "max": 1.0, "step": 0.01,
-        "label": "Ngưỡng từ chối khi không rerank",
-        "help": "Điểm tìm kiếm theo nghĩa (cosine) thấp hơn ngưỡng thì từ chối. Cao hơn: ít bịa hơn, "
-                "nhưng dễ từ chối nhầm.",
+    "hard_rerank_score": {
+        "type": "float", "min": 0.0, "max": 1.0, "step": 0.001,
+        "label": "Ngưỡng từ chối ngay (có rerank)",
+        "help": "Điểm rerank thấp hơn ngưỡng này: từ chối luôn, không hỏi model (câu hỏi không liên quan tài liệu). "
+                "Để thấp: câu hỏi bằng lời lẽ đời thường thường có điểm rất thấp dù sách có câu trả lời.",
     },
     "min_rerank_score": {
         "type": "float", "min": 0.0, "max": 1.0, "step": 0.01,
-        "label": "Ngưỡng từ chối khi có rerank",
-        "help": "Điểm rerank thấp hơn ngưỡng thì từ chối. Cao hơn: ít bịa hơn, nhưng dễ từ chối nhầm.",
+        "label": "Ngưỡng tin cậy (có rerank)",
+        "help": "Giữa ngưỡng từ chối ngay và ngưỡng này: vẫn hỏi model nhưng nhắc model chặt hơn, "
+                "và câu trả lời có ghi chú nên mở nguồn kiểm tra. Ngưỡng này cũng dùng cho câu hỏi vị trí và tổng quan.",
+    },
+    "hard_vector_score": {
+        "type": "float", "min": 0.0, "max": 1.0, "step": 0.01,
+        "label": "Ngưỡng từ chối ngay (chế độ Nhanh)",
+        "help": "Như trên, nhưng tính bằng điểm tìm theo nghĩa (cosine) khi không rerank.",
+    },
+    "min_vector_score": {
+        "type": "float", "min": 0.0, "max": 1.0, "step": 0.01,
+        "label": "Ngưỡng tin cậy (chế độ Nhanh)",
+        "help": "Như ngưỡng tin cậy ở trên, tính bằng điểm cosine khi không rerank.",
     },
     "history_turns": {
         "type": "int", "min": 0, "max": 10,
@@ -92,6 +103,8 @@ def update(db: Session, changes: dict) -> dict:
     merged = {**get_all(db), **clean}
     if merged["top_k_context"] > merged["top_k_retrieve"]:
         raise HTTPException(400, "Số đoạn đưa cho model không được lớn hơn số đoạn tìm ban đầu.")
+    if merged["hard_rerank_score"] > merged["min_rerank_score"] or merged["hard_vector_score"] > merged["min_vector_score"]:
+        raise HTTPException(400, "Ngưỡng từ chối ngay không được cao hơn ngưỡng tin cậy.")
     for key, value in clean.items():
         row = db.get(AppSetting, key)
         if row is None:
@@ -127,4 +140,5 @@ def public_info(db: Session) -> dict:
         "default_mode": values["default_mode"],
         "allow_user_mode": values["allow_user_mode"],
         "modes": [{"id": m, **opts_mod.MODE_INFO[m]} for m in opts_mod.MODES],
+        "max_upload_mb": config.MAX_UPLOAD_MB,
     }

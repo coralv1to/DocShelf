@@ -48,8 +48,10 @@ class Options:
     skip_rerank_when_clear: bool  # câu hỏi vị trí + vector và BM25 cùng chọn 1 đoạn -> không rerank
     top_k_retrieve: int
     top_k_context: int
-    min_vector_score: float
-    min_rerank_score: float
+    min_vector_score: float       # ngưỡng tin cậy (không rerank)
+    min_rerank_score: float       # ngưỡng tin cậy (có rerank)
+    hard_vector_score: float      # ngưỡng cứng: thấp hơn thì từ chối ngay, không hỏi model
+    hard_rerank_score: float
     history_turns: int
 
 
@@ -60,6 +62,8 @@ def tuning_from_config() -> dict:
         "top_k_context": config.TOP_K_CONTEXT,
         "min_vector_score": config.MIN_VECTOR_SCORE,
         "min_rerank_score": config.MIN_RERANK_SCORE,
+        "hard_vector_score": config.HARD_VECTOR_SCORE,
+        "hard_rerank_score": config.HARD_RERANK_SCORE,
         "history_turns": config.HISTORY_TURNS,
     }
 

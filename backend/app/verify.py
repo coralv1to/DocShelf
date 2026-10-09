@@ -8,8 +8,11 @@ from .chunker import Chunk
 MIN_QUOTE_CHARS = 8
 
 
+_DROP_SUP = {ord(d): None for d in "⁰¹²³⁴⁵⁶⁷⁸⁹"}  # số mũ / số chú thích (xem pdf_parser.SUP_DIGITS)
+
+
 def normalize(s: str) -> str:
-    s = unicodedata.normalize("NFC", s).lower()
+    s = unicodedata.normalize("NFC", s).translate(_DROP_SUP).lower()
     s = re.sub(r"\s+", " ", s)
     return s.strip(" .,;:\"'“”‘’()")
 

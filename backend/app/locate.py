@@ -5,7 +5,7 @@ from pathlib import Path
 import pymupdf
 from rapidfuzz import fuzz
 
-from .pdf_parser import GAP_RATIO
+from .pdf_parser import GAP_RATIO, SUP_DIGITS, fix_degree, span_char
 
 FUZZY_MIN = 85          # điểm khớp gần đúng tối thiểu (0-100)
 EDGE_PUNCT = " .,;:\"'“”‘’()"
@@ -29,12 +29,17 @@ def _page_chars(page) -> list[tuple[str, Box | None, int]]:
             for span in line["spans"]:
                 gap = span["size"] * GAP_RATIO
                 for ch in span["chars"]:
-                    c = ch["c"]
+                    c = span_char(ch["c"], span)  # giống hệt pdf_parser
                     x0, y0, x1, y1 = ch["bbox"]
                     if prev_x1 is not None and c != " " and out and out[-1][0] != " " and x0 - prev_x1 > gap:
                         out.append((" ", None, line_id))
                     out.append((c, (x0, y0, x1, y1), line_id))
                     prev_x1 = x1
+            # Ký hiệu độ: sửa trong phạm vi dòng vừa dựng (giống pdf_parser)
+            first = next((k for k in range(len(out) - 1, -1, -1) if out[k][2] != line_id), -1) + 1
+            seg = [c for c, _, _ in out[first:]]
+            fix_degree(seg)
+            out[first:] = [(c, box, lid) for c, (_, box, lid) in zip(seg, out[first:])]
             # Hết dòng: nối từ bị ngắt bằng gạch nối, còn lại thì thêm dấu cách
             if out and out[-1][0] == "­":
                 out.pop()
@@ -48,6 +53,8 @@ def _normalize_with_map(chars):
     text: list[str] = []
     index: list[int] = []  # vị trí trong text chuẩn hóa -> vị trí trong chars
     for i, (c, _, _) in enumerate(chars):
+        if c in SUP_DIGITS:
+            continue  # số mũ / số chú thích: không tính khi so khớp
         for nc in unicodedata.normalize("NFD", c).lower():
             if nc.isspace():
                 if text and text[-1] == " ":
@@ -59,7 +66,7 @@ def _normalize_with_map(chars):
 
 
 def _normalize_quote(quote: str) -> str:
-    q = unicodedata.normalize("NFD", quote.replace("­", "")).lower()
+    q = unicodedata.normalize("NFD", quote.replace("­", "").translate({ord(d): None for d in SUP_DIGITS})).lower()
     return " ".join(q.split()).strip(EDGE_PUNCT)
 
 

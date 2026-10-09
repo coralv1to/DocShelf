@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -21,7 +23,7 @@ from .models import ChatSession, Document, Message
 log = logging.getLogger("docshelf")
 
 DOC_ID_RE = re.compile(r"^[0-9a-f]{32}$")
-MAX_UPLOAD_MB = 20
+MAX_UPLOAD_MB = config.MAX_UPLOAD_MB
 
 DB = Annotated[Session, Depends(get_db)]
 
@@ -228,6 +230,7 @@ def get_messages(session_id: str, user: CurrentUser, db: DB):
                 "answer": m.content,
                 "found": bool(m.found),
                 "citations": m.citations or [],
+                "example": (m.debug or {}).get("example"),
                 "debug": m.debug or {},
             }
         out.append(item)
@@ -279,3 +282,23 @@ def stats(_admin: AdminUser, db: DB):
         "sessions": db.scalar(select(func.count(ChatSession.id))),
         "messages": db.scalar(select(func.count(Message.id))),
     }
+
+
+# ==================================================================== giao diện
+# Thư mục frontend/ (HTML/CSS/JS thuần, không cần build) nằm cạnh backend/.
+# FastAPI phục vụ luôn giao diện -> chỉ cần chạy uvicorn, mở http://localhost:8000
+# Đặt biến môi trường FRONTEND_DIR nếu để giao diện ở chỗ khác.
+FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", Path(__file__).resolve().parents[2] / "frontend"))
+
+
+@app.get("/login", include_in_schema=False)
+def login_page():
+    return RedirectResponse("/login.html")  # đường dẫn cũ của bản Next.js
+
+
+# Mount SAU CÙNG: FastAPI so khớp route theo thứ tự khai báo, nên mọi /api/... ở trên luôn được ưu tiên;
+# đường dẫn nào không phải API mới rơi xuống đây. html=True: vào "/" trả về index.html.
+if (FRONTEND_DIR / "index.html").exists():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+else:
+    log.warning("Không thấy %s/index.html — chỉ chạy API, không có giao diện.", FRONTEND_DIR)

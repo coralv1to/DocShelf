@@ -37,7 +37,12 @@ CHUNK_OVERLAP_WORDS = _int("CHUNK_OVERLAP_WORDS", 40)
 TOP_K_RETRIEVE = _int("TOP_K_RETRIEVE", 20)
 TOP_K_CONTEXT = _int("TOP_K_CONTEXT", 4)
 MIN_VECTOR_SCORE = _float("MIN_VECTOR_SCORE", 0.45)
-MIN_RERANK_SCORE = _float("MIN_RERANK_SCORE", 0.30)
+MIN_RERANK_SCORE = _float("MIN_RERANK_SCORE", 0.30)     # ngưỡng TIN CẬY: dưới mức này vẫn hỏi model nhưng nhắc chặt hơn
+# Ngưỡng CỨNG: dưới mức này từ chối ngay, không hỏi model (câu hỏi gần như chắc chắn không liên quan tài liệu).
+# Câu hỏi đời thường của sinh viên hay có điểm rerank 0.01-0.3 dù đã tìm đúng đoạn -> ngưỡng cứng phải thấp.
+HARD_RERANK_SCORE = _float("HARD_RERANK_SCORE", 0.005)
+HARD_VECTOR_SCORE = _float("HARD_VECTOR_SCORE", 0.35)    # như trên, cho chế độ Nhanh (không rerank)
+MAX_UPLOAD_MB = _int("MAX_UPLOAD_MB", 100)               # dung lượng PDF tối đa khi upload
 
 # Hội thoại
 HISTORY_TURNS = _int("HISTORY_TURNS", 3)

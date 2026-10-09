@@ -40,27 +40,33 @@ docshelf/
 │   ├── eval/               benchmark chất lượng
 │   ├── tools/              script kiểm tra (python -m tools.<tên>)
 │   └── data/               file PDF gốc (không commit)
-├── frontend/               Next.js
+├── frontend/               giao diện HTML/CSS/JS thuần (FastAPI phục vụ luôn, không cần Node.js)
 ├── db/init/                SQL chạy lần đầu khi tạo Postgres
 ├── docs/                   tài liệu
-└── docker-compose.yml      Postgres + pgvector
+├── docker-compose.yml      Postgres + pgvector
+├── setup.bat               cài đặt lần đầu (bấm đúp)
+└── run.bat                 chạy ứng dụng (bấm đúp)
 ```
 
-## Chạy nhanh (đã cài đặt xong theo docs/01)
+## Cài đặt và chạy (Windows)
+
+Cần có sẵn: **Docker Desktop** (đang mở), **Python 3.12+**, **Ollama**. Không cần Node.js.
+
+1. **Lần đầu:** bấm đúp `setup.bat`. Script tự làm hết: bật Postgres, tạo `.venv`, cài thư viện, tạo `backend\.env` (tự sinh `JWT_SECRET`), tạo bảng, tải 2 model Ollama, tạo tài khoản admin.
+2. **Mỗi lần dùng:** bấm đúp `run.bat` → trình duyệt tự mở http://localhost:8000
+   - `run.bat lan`: cho máy khác cùng mạng LAN vào bằng `http://<IP-máy-này>:8000`
+   - Demo qua Internet: `ngrok http 8000 --basic-auth "demo:matkhau"` (chỉ một cổng, giao diện và API chung một địa chỉ)
+
+Chạy bằng tay (để phát triển, tự nạp lại khi sửa code):
 
 ```powershell
 docker compose up -d
-
 cd backend
 .venv\Scripts\Activate.ps1
 uvicorn app.main:app --reload --port 8000
-
-# cửa sổ khác
-cd frontend
-npm run dev
 ```
 
-Mở http://localhost:3000
+Mở http://localhost:8000. Giao diện là các file trong `frontend/`: sửa xong chỉ cần tải lại trang (F5), không có bước build.
 
 ## Lệnh quản trị (trong backend/, đã activate .venv)
 
@@ -73,6 +79,7 @@ Mở http://localhost:3000
 | `python -m app.cli import-legacy` | Nhập tài liệu cũ trong `data/` vào database |
 | `python -m app.cli create-api-key <tên>` | Cấp API key cho hệ thống ngoài |
 | `python -m app.cli reindex --all` | Embed lại sau khi đổi `EMBED_MODEL` |
+| `python -m app.cli reparse --all` | Đọc lại PDF gốc bằng bộ cắt đoạn mới (chạy 1 lần sau khi cập nhật code đọc/cắt PDF) |
 
 ## Script kiểm tra (trong backend/, đã activate .venv)
 
@@ -84,3 +91,4 @@ Mở http://localhost:3000
 | `python -m tools.check_locate sample.pdf 3 "câu trích"` | Tô vị trí câu trích, lưu `locate_test.png` |
 | `python -m tools.load_test --key dsk_... --doc <doc_id>` | Kiểm thử nhiều người hỏi cùng lúc |
 | `chay-benchmark.bat` | Benchmark chất lượng, log ở `eval\bench_log.txt` |
+| `chay-test-triet-hoc.bat` | Chạy bộ 144 câu hội thoại + 40 câu bổ sung (`eval\bo_sung_triet_hoc.json`) trên giáo trình Triết học (đặt PDF + file md câu hỏi ở thư mục gốc). Log ở `eval\triet_log.txt`, kết quả + báo cáo chấm tự động ở `eval\reports\triet_*.jsonl / .md` |

@@ -13,7 +13,7 @@ Tài liệu này dành cho việc chạy DocShelf trên máy của bạn như m�
 5. [Tạo bảng bằng Alembic](#5-tạo-bảng-bằng-alembic)
 6. [Tạo tài khoản quản trị và người dùng](#6-tạo-tài-khoản-quản-trị-và-người-dùng)
 7. [Chuyển tài liệu cũ vào database](#7-chuyển-tài-liệu-cũ-vào-database-nếu-có)
-8. [Chạy backend + frontend](#8-chạy-backend--frontend)
+8. [Chạy ứng dụng](#8-chạy-ứng-dụng)
 8b. [Chế độ trả lời và trang Cài đặt](#8b-chế-độ-trả-lời-và-trang-cài-đặt)
 9. [Dùng hằng ngày](#9-dùng-hằng-ngày)
 10. [Đổi model](#10-đổi-model)
@@ -26,12 +26,13 @@ Tài liệu này dành cho việc chạy DocShelf trên máy của bạn như m�
 ## 1. Bức tranh tổng thể
 
 ```
-Trình duyệt ──► Next.js (cổng 3000) ──/api/*──► FastAPI (cổng 8000) ──► Postgres + pgvector (Docker, cổng 5433)
-                  giao diện                       pipeline RAG          tài khoản, tài liệu, đoạn văn,
-                                                      │                 vector, lịch sử chat
-                                                      ▼
-                                                 Ollama (cổng 11434)
-                                                 qwen3.5:4b (trả lời) + qwen3-embedding:0.6b (vector)
+Trình duyệt ──► FastAPI (cổng 8000) ─────────────────────────► Postgres + pgvector (Docker, cổng 5433)
+               ├─ /            giao diện (frontend/*.html, css, js)   tài khoản, tài liệu, đoạn văn,
+               └─ /api/...     pipeline RAG                           vector, lịch sử chat
+                                    │
+                                    ▼
+                               Ollama (cổng 11434)
+                               qwen3.5:4b (trả lời) + qwen3-embedding:0.6b (vector)
 ```
 
 Dữ liệu nằm ở đâu:
@@ -57,11 +58,12 @@ Tài khoản được tạo bằng dòng lệnh (mục 6), chưa có trang đăn
 
 ## 2. Chuẩn bị
 
+> **Lối tắt:** cài xong Docker Desktop, Python, Ollama thì bấm đúp `setup.bat` ở thư mục gốc. Script làm thay các mục 3 → 6 bên dưới (bật Postgres, cài thư viện, tạo `.env` + `JWT_SECRET`, tạo bảng, tải model, tạo admin). Các mục dưới vẫn giữ để hiểu từng bước làm gì.
+
 Cần có trên máy:
 
 - **Docker Desktop** (đang chạy)
 - **Python 3.12+** (máy bạn đang dùng 3.14)
-- **Node.js 20+**
 - **Ollama** với 2 model:
 
 ```powershell
@@ -223,9 +225,11 @@ Chạy lại nhiều lần không sao: tài liệu đã có sẽ được bỏ q
 
 ---
 
-## 8. Chạy backend + frontend
+## 8. Chạy ứng dụng
 
-**Cửa sổ 1 — backend** (trong `backend`, đã activate `.venv`):
+Cách nhanh nhất: bấm đúp **`run.bat`** ở thư mục gốc (tự bật Postgres, kiểm tra Ollama, chạy backend, mở trình duyệt).
+
+Hoặc chạy bằng tay (trong `backend`, đã activate `.venv`):
 
 ```powershell
 uvicorn app.main:app --reload --port 8000
@@ -233,14 +237,7 @@ uvicorn app.main:app --reload --port 8000
 
 Lúc khởi động, backend kiểm tra `JWT_SECRET` và kết nối Postgres; thiếu gì sẽ báo lỗi rõ ràng (xem mục 12). Tài liệu API tự sinh: http://localhost:8000/docs
 
-**Cửa sổ 2 — frontend:**
-
-```powershell
-cd frontend
-npm run dev
-```
-
-Mở http://localhost:3000 → tự chuyển sang trang đăng nhập.
+Mở http://localhost:8000 → tự chuyển sang trang đăng nhập. **Không cần Node.js, không có bước build**: FastAPI phục vụ luôn các file HTML/CSS/JS trong thư mục `frontend/` (xem cuối `app/main.py`). Sửa giao diện xong chỉ cần F5.
 
 - Đăng nhập **admin**: thấy ô "Thêm tài liệu lên kệ" và nút xóa (hiện khi rê chuột vào thẻ tài liệu).
 - Đăng nhập **user**: chỉ thấy kệ tài liệu và chat.
@@ -265,7 +262,7 @@ Admin vào **Cài đặt** (sidebar) để chọn chế độ trả lời mặc 
 Các tùy chọn khác trong trang Cài đặt:
 
 - **Cho người dùng tự chọn chế độ:** bật thì ô chat có nút Nhanh / Cân bằng / Kỹ (trình duyệt nhớ lựa chọn); tắt thì mọi người dùng chế độ mặc định.
-- **Nâng cao:** số đoạn tìm, số đoạn đưa cho model, các ngưỡng từ chối, số lượt hội thoại nhớ. Ô nào khác mặc định thì viền vàng. **Khôi phục mặc định** đưa về giá trị trong `.env`.
+- **Nâng cao:** số đoạn tìm, số đoạn đưa cho model, các ngưỡng, số lượt hội thoại nhớ. Có 2 loại ngưỡng: **ngưỡng từ chối ngay** (thấp, mặc định 0.005: dưới mức này câu hỏi coi như không liên quan tài liệu, không hỏi model) và **ngưỡng tin cậy** (mặc định 0.30: dưới mức này vẫn hỏi model nhưng nhắc model chặt hơn, câu trả lời có ghi chú nên mở nguồn kiểm tra). Lớp chống bịa chính là bước kiểm chứng trích dẫn nguyên văn sau khi model trả lời. Ô nào khác mặc định thì viền vàng. **Khôi phục mặc định** đưa về giá trị trong `.env`.
 
 Thay đổi có hiệu lực từ câu hỏi tiếp theo, không cần khởi động lại backend.
 
@@ -288,13 +285,10 @@ Câu hỏi vị trí mà vẫn bị rerank thì `steps.rerank` ghi lý do, ví d
 ## 9. Dùng hằng ngày
 
 ```powershell
-# Mở Docker Desktop (Postgres tự chạy vì restart: unless-stopped)
+# Mở Docker Desktop (Postgres tự chạy vì restart: unless-stopped), rồi bấm đúp run.bat. Hoặc:
 cd D:\03_Projects\08_LLM\doc-qa\backend
 .venv\Scripts\Activate.ps1
 uvicorn app.main:app --reload --port 8000
-# cửa sổ khác
-cd D:\03_Projects\08_LLM\doc-qa\frontend
-npm run dev
 ```
 
 Sao lưu dữ liệu:
@@ -339,6 +333,8 @@ python -m app.cli reindex --all     # embed lại mọi tài liệu (không cầ
 
 Nếu quên `reindex`, khi chat sẽ nhận lỗi 409 nhắc chạy lệnh này, thay vì trả lời sai.
 
+**Sau khi cập nhật code đọc / cắt PDF** (`pdf_parser.py`, `chunker.py`): tài liệu đã upload vẫn giữ cách cắt cũ. Chạy `python -m app.cli reparse --all` để đọc lại PDF gốc (giữ nguyên tài liệu và các cuộc trò chuyện), rồi khởi động lại backend.
+
 Với GPU 6GB, xem phần đánh giá VRAM trong tài liệu 02 trước khi nâng model.
 
 ---
@@ -370,7 +366,7 @@ Lưu ý khi đọc kết quả chế độ Cân bằng: câu C1.3 ("Xác suất 
 | `Không kết nối được Postgres` | Docker Desktop chưa chạy, chưa `docker compose up -d`, sai `DATABASE_URL` | `docker compose ps` phải `healthy` |
 | `relation "users" does not exist` | Chưa tạo bảng | `alembic upgrade head` |
 | `port is already allocated` khi `docker compose up` | Cổng 5433 bị chiếm | Đổi `127.0.0.1:5433` thành cổng khác trong compose **và** trong `DATABASE_URL` |
-| Đăng nhập xong lại bị đẩy về trang đăng nhập | Cookie không lưu được | Mở bằng `http://localhost:3000`; local thì để `COOKIE_SECURE=false` |
+| Đăng nhập xong lại bị đẩy về trang đăng nhập | Cookie không lưu được | Mở bằng `http://localhost:8000`; local thì để `COOKIE_SECURE=false` |
 | Chat báo 409 "index bằng ... đang dùng ..." | Đã đổi `EMBED_MODEL` | `python -m app.cli reindex --all` |
 | Chat báo 503 "Không kết nối được Ollama" | Ollama chưa chạy | Mở Ollama, `ollama ps` |
 | `column chunks.search_tokens does not exist` hoặc `relation "app_settings" does not exist` | Code mới, database chưa cập nhật | `alembic upgrade head` |
@@ -393,5 +389,5 @@ Lưu ý khi đọc kết quả chế độ Cân bằng: câu C1.3 ("Xác suất 
 | Nhập tài liệu cũ | `python -m app.cli import-legacy` |
 | Index lại sau khi đổi model embedding | `python -m app.cli reindex --all` |
 | Cấp API key cho hệ thống ngoài | `python -m app.cli create-api-key <tên>` |
-| Chạy backend | `uvicorn app.main:app --reload --port 8000` |
+| Chạy backend + giao diện | `uvicorn app.main:app --reload --port 8000` (hoặc bấm đúp `run.bat`) |
 | Kiểm tra độ trễ Ollama | `python -m tools.check_latency` |

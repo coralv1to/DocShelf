@@ -9,7 +9,7 @@ from .options import Options
 REFUSAL = "Tài liệu không có thông tin để trả lời câu hỏi này."  # bản ngắn, lưu vào lịch sử hội thoại
 UNVERIFIED = "Không kiểm chứng được câu trả lời từ tài liệu."   # bản ngắn khi trích dẫn không khớp
 
-OUTLINE_MAX_ITEMS = 12  # số mục tối đa liệt kê trong câu trả lời tổng quan / gợi ý
+OUTLINE_MAX_ITEMS = 16  # số mục tối đa liệt kê trong câu trả lời tổng quan / gợi ý
 TOP_LEVEL_RE = re.compile(r"^(chương|phần|chapter|part)\b", re.IGNORECASE)
 # Câu hỏi vị trí: "hàm append ở trang nào", "lưu đồ nằm ở mục nào"
 LOCATION_RE = re.compile(
@@ -27,25 +27,56 @@ FIGURE_STOP = set(
     "hình bảng biểu minh họa hoạ của về các những một và trong tài liệu được có".split()
 )
 FIGURE_MIN_F1 = 0.5
-CHAPTER_NO_RE = re.compile(r"\b(?:chương|chapter)\s+(\d+)", re.IGNORECASE)
+CHAPTER_NO_RE = re.compile(r"\b(?:chương|chapter)\s+(\d+|[ivxlc]+)\b", re.IGNORECASE)
 
 OVERVIEW_ID = "overview"
-OVERVIEW_MAX_WORDS = 500  # giới hạn độ dài đoạn tổng quan (~700 token)
+# Ngữ cảnh đưa cho model: ngoài các đoạn tìm được, thêm đoạn liền trước/liền sau CÙNG MỤC của 2 đoạn tốt nhất
+# (định nghĩa, lập luận hay bị cắt ngang giữa 2 đoạn). Tổng không quá CONTEXT_MAX_WORDS từ (~2.500 token).
+CONTEXT_MAX_WORDS = 1800
+EXPAND_TOP = 2
+OVERVIEW_MAX_WORDS = 800  # giới hạn độ dài đoạn tổng quan (~1.100 token)
 BARE_CHAPTER_RE = re.compile(r"^(chương|phần|mục)\s+\w+\.?$", re.IGNORECASE)  # 'CHƯƠNG 6.' không có tên
 
 # Câu hỏi về toàn bộ tài liệu: "tài liệu nói về gì", "tóm tắt", "gồm những phần nào"...
 OVERVIEW_QUESTION_RE = re.compile(
     r"(nói về|chủ đề|tóm tắt|nội dung chính|gồm (những|các|mấy)|có (những|mấy) (phần|mục|chương)|mục lục"
+    r"|bắt đầu (học )?từ đâu|nên (học|đọc) (phần|chương|mục) nào trước"
     r"|what is (this|the) (document|paper|file) about|summari[sz]e|main topics?)",
     re.IGNORECASE,
 )
 
 
 # ---------------------------------------------------------------- INDEXING
+PART_LINE_RE = re.compile(r"^(phần|part|phụ lục|appendix)\b", re.IGNORECASE)
+CHAPTER_LINE_RE = re.compile(r"^(chương|chapter)\b", re.IGNORECASE)
+ROMAN_LINE_RE = re.compile(r"^[IVX]{1,4}\s*[-.–]\s+\S")
+REVIEW_TITLE_RE = re.compile(r"^(câu hỏi|bài tập)", re.IGNORECASE)
+ROMAN_VALUES = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100}
+
+
 def _title_depth(title: str) -> int:
-    """Cấp của tiêu đề: chương/phần = 0, '1.1' = 1, '1.1.1' = 2... (theo số dấu chấm trong số mục)."""
+    """Cấp của tiêu đề: phần = 0, chương = 1, mục La Mã 'I-' = 2, '1.' = 3, '1.1' = 4, '1.1.1' = 5..."""
+    if PART_LINE_RE.match(title):
+        return 0
+    if CHAPTER_LINE_RE.match(title):
+        return 1
+    if ROMAN_LINE_RE.match(title):
+        return 2
     m = re.match(r"^(\d+(?:\.\d+)*)", title)
-    return m.group(1).count(".") if m else 0
+    return 3 + m.group(1).count(".") if m else 3
+
+
+def _number_value(token: str) -> int | None:
+    """'3' -> 3, 'III' -> 3, 'xiv' -> 14."""
+    if token.isdigit():
+        return int(token)
+    vals = [ROMAN_VALUES.get(ch) for ch in token.lower()]
+    if not vals or None in vals:
+        return None
+    total = 0
+    for k, v in enumerate(vals):
+        total += -v if k + 1 < len(vals) and vals[k + 1] > v else v
+    return total
 
 
 def _build_overview_chunk(title: str, chunks: list[chunker.Chunk]) -> chunker.Chunk | None:
@@ -58,7 +89,7 @@ def _build_overview_chunk(title: str, chunks: list[chunker.Chunk]) -> chunker.Ch
     seen: set[str] = set()
     for c in chunks:
         for t in c.header.split(" > ")[1:]:  # bỏ tên file ở đầu
-            if t not in seen and not BARE_CHAPTER_RE.match(t):
+            if t not in seen and not BARE_CHAPTER_RE.match(t) and not REVIEW_TITLE_RE.match(t):
                 seen.add(t)
                 entries.append((t, _title_depth(t), c.page_start))
     if not entries:
@@ -79,11 +110,8 @@ def _build_overview_chunk(title: str, chunks: list[chunker.Chunk]) -> chunker.Ch
     )
 
 
-def ingest_pdf(pdf_path: str, title: str, **meta) -> store.DocumentIndex:
-    """Đọc PDF -> cắt đoạn -> embed -> lưu DB.
-
-    meta: thông tin thêm ghi vào bảng documents (filename, file_sha256, uploaded_by).
-    """
+def _build_index(pdf_path: str, title: str, doc_id: str) -> store.DocumentIndex:
+    """Đọc PDF -> cắt đoạn (+ đoạn tổng quan) -> embed."""
     lines = pdf_parser.parse_pdf(pdf_path)
     if not lines:
         raise ValueError("Không trích được chữ nào từ PDF. Có thể đây là bản scan, cần OCR.")
@@ -94,8 +122,26 @@ def ingest_pdf(pdf_path: str, title: str, **meta) -> store.DocumentIndex:
         chunks.append(overview)
 
     vectors = embedder.embed_documents([c.text_for_search() for c in chunks])
+    return store.DocumentIndex(doc_id, title, chunks, vectors)
 
-    index = store.DocumentIndex(uuid.uuid4().hex, title, chunks, vectors)
+
+def reparse_document(doc_id: str, title: str) -> store.DocumentIndex:
+    """Đọc lại PDF gốc của tài liệu đã có bằng bộ đọc/cắt đoạn hiện tại (sau khi nâng cấp code)."""
+    pdf = store.source_pdf(doc_id)
+    if not pdf.exists():
+        raise ValueError("Không còn file PDF gốc của tài liệu này.")
+    index = _build_index(str(pdf), title, doc_id)
+    store.replace_chunks(index)
+    forget_document(doc_id)
+    return index
+
+
+def ingest_pdf(pdf_path: str, title: str, **meta) -> store.DocumentIndex:
+    """Đọc PDF -> cắt đoạn -> embed -> lưu DB.
+
+    meta: thông tin thêm ghi vào bảng documents (filename, file_sha256, uploaded_by).
+    """
+    index = _build_index(pdf_path, title, uuid.uuid4().hex)
     meta.setdefault("filename", f"{title}.pdf")
     store.save_index(index, pdf_path, num_pages=locate.page_count(pdf_path), **meta)
     return index
@@ -104,6 +150,7 @@ def ingest_pdf(pdf_path: str, title: str, **meta) -> store.DocumentIndex:
 def forget_document(doc_id: str) -> None:
     """Bỏ cache riêng của pipeline khi tài liệu bị xóa."""
     _caption_cache.pop(doc_id, None)
+    _outline_cache.pop(doc_id, None)
 
 
 # ---------------------------------------------------------------- QUERY
@@ -156,6 +203,27 @@ def _clear_winner(vector_hits: list, keyword_hits: list) -> tuple[int | None, st
     return keyword_hits[0][0], ""
 
 
+def _expand_context(index: store.DocumentIndex, top: list[tuple[int, float]]) -> list[int]:
+    """Vị trí các đoạn đưa cho model: các đoạn tìm được + đoạn kề cùng mục của EXPAND_TOP đoạn tốt nhất."""
+    chosen = [i for i, _ in top]
+    words = sum(len(index.chunks[i].text.split()) for i in chosen)
+    for i, _ in top[:EXPAND_TOP]:
+        if index.chunks[i].id == OVERVIEW_ID:
+            continue
+        for j in (i + 1, i - 1):  # đoạn sau trước (thường là phần tiếp của lập luận), rồi đoạn trước
+            if not 0 <= j < len(index.chunks) or j in chosen:
+                continue
+            c = index.chunks[j]
+            if c.id == OVERVIEW_ID or c.header != index.chunks[i].header:
+                continue
+            n = len(c.text.split())
+            if words + n > CONTEXT_MAX_WORDS:
+                continue
+            chosen.append(j)
+            words += n
+    return sorted(chosen)  # giữ thứ tự xuất hiện trong văn bản
+
+
 def _overview_position(index: store.DocumentIndex) -> int | None:
     for i, c in enumerate(index.chunks):
         if c.id == OVERVIEW_ID:
@@ -179,16 +247,38 @@ def _page_range_for(index: store.DocumentIndex, citation: dict) -> tuple[int, in
 
 
 # ---------------------------------------------------------------- DÀN Ý (không cần LLM)
+_outline_cache: dict[str, list[str]] = {}
+
+
 def _outline_lines(index: store.DocumentIndex) -> list[str]:
-    pos = _overview_position(index)
-    return index.chunks[pos].text.splitlines() if pos is not None else []
+    """Dàn ý ĐẦY ĐỦ (mọi tiêu đề, theo thứ tự), dựng từ header các đoạn.
+
+    Đoạn tổng quan chỉ giữ các cấp lớn cho vừa giới hạn từ; trả lời "Chương 7 gồm những mục nào?"
+    cần cả các cấp nhỏ nên dựng lại từ header.
+    """
+    if index.doc_id in _outline_cache:
+        return _outline_cache[index.doc_id]
+    lines, seen = [], set()
+    for c in index.chunks:
+        if c.id == OVERVIEW_ID:
+            continue
+        for t in c.header.split(" > ")[1:]:
+            if t not in seen and not BARE_CHAPTER_RE.match(t) and not REVIEW_TITLE_RE.match(t):
+                seen.add(t)
+                lines.append(t)
+    if not lines:  # tài liệu cũ không có header theo mục: dùng đoạn tổng quan
+        pos = _overview_position(index)
+        lines = index.chunks[pos].text.splitlines() if pos is not None else []
+    _outline_cache[index.doc_id] = lines
+    return lines
 
 
 def _top_level(lines: list[str]) -> list[str]:
-    """Các mục cấp cao nhất: ưu tiên dòng 'CHƯƠNG/PHẦN ...'; nếu không có thì lấy cấp số nhỏ nhất."""
-    chapters = [t for t in lines if TOP_LEVEL_RE.match(t)]
-    if len(chapters) >= 2:
-        return chapters
+    """Các mục cấp cao nhất: ưu tiên dòng 'Chương ...', rồi 'Phần ...'; nếu không có thì lấy cấp nhỏ nhất."""
+    for pattern in (CHAPTER_LINE_RE, PART_LINE_RE):
+        found = [t for t in lines if pattern.match(t)]
+        if len(found) >= 2:
+            return found
     if not lines:
         return []
     min_depth = min(_title_depth(t) for t in lines)
@@ -214,16 +304,26 @@ def _overview_answer(index: store.DocumentIndex, question: str) -> tuple[str, li
     if not lines:
         return None
 
-    # Hỏi về một chương cụ thể: "Chương 3 gồm những mục nào?"
+    # Hỏi về một chương cụ thể: "Chương 3 gồm những mục nào?" (sách đánh số 3 hay III đều được)
     m = CHAPTER_NO_RE.search(question)
     if m:
-        n = m.group(1)
-        start = next((k for k, t in enumerate(lines) if re.match(rf"^(chương|chapter)\s+{n}\b", t, re.IGNORECASE)), None)
+        n = _number_value(m.group(1))
+        start = None
+        for k, t in enumerate(lines):
+            mm = re.match(r"^(?:chương|chapter)\s+(\d+|[ivxlc]+)\b", t, re.IGNORECASE)
+            if mm and n is not None and _number_value(mm.group(1)) == n:
+                start = k
+                break
+        subs = []
         if start is not None:
             head = lines[start]
             end = next((k for k in range(start + 1, len(lines)) if TOP_LEVEL_RE.match(lines[k])), len(lines))
-            # Chỉ lấy mục con đánh số đúng chương (bỏ dòng lạc như '2.7 ...' nằm trong chương 7)
-            subs = [t for t in lines[start + 1 : end] if re.match(rf"^{n}\.\d+(\s|$)", t)]
+            body = lines[start + 1 : end]
+            # Sách đánh số mục theo chương ('3.1', '3.2'): chỉ lấy mục đúng chương (bỏ dòng lạc như '2.7 ...')
+            subs = [t for t in body if re.match(rf"^{n}\.\d+(\s|$)", t)]
+            if not subs and body:  # sách đánh số kiểu 'I-', '1.': lấy các mục cấp cao nhất trong chương
+                top_depth = min(_title_depth(t) for t in body)
+                subs = [t for t in body if _title_depth(t) == top_depth]
         if start is not None and subs:
             body = "\n".join(f"• {_pretty(t)}" for t in subs[:OUTLINE_MAX_ITEMS])
             return f"{_pretty(head)} gồm {len(subs)} mục:\n{body}", [head] + subs[:OUTLINE_MAX_ITEMS]
@@ -234,7 +334,7 @@ def _overview_answer(index: store.DocumentIndex, question: str) -> tuple[str, li
     shown = top[:OUTLINE_MAX_ITEMS]
     body = "\n".join(f"• {_pretty(t)}" for t in shown)
     more = f"\n… và {len(top) - len(shown)} mục khác." if len(top) > len(shown) else ""
-    chapters = sum(1 for t in top if TOP_LEVEL_RE.match(t))
+    chapters = sum(1 for t in top if CHAPTER_LINE_RE.match(t))
     unit = f"{chapters} chương" if chapters >= 2 else f"{len(top)} phần chính"
     hint = (
         "Bạn có thể hỏi chi tiết từng chương, ví dụ: “Chương 2 gồm những mục nào?”"
@@ -496,7 +596,7 @@ def answer_question(
         winner, why_not = _clear_winner(vector_hits, keyword_hits)
     if winner is not None:
         top = [(winner, float(index.embeddings[winner] @ q_vec))]
-        gate = 0.0  # sự đồng thuận của 2 cách tìm đã là bằng chứng, không cần ngưỡng điểm
+        gate = hard_gate = 0.0  # sự đồng thuận của 2 cách tìm đã là bằng chứng, không cần ngưỡng điểm
         best_score = top[0][1]
         steps["rerank"] = "bỏ qua (câu hỏi vị trí, vector và từ khóa cùng chọn 1 đoạn)"
     elif opts.use_rerank:
@@ -504,13 +604,13 @@ def answer_question(
 
         top = rerank(retrieval_query, [(i, index.chunks[i].text_for_search()) for i, _ in candidates])
         top = top[: opts.top_k_context]
-        gate = opts.min_rerank_score
+        gate, hard_gate = opts.min_rerank_score, opts.hard_rerank_score
         best_score = top[0][1] if top else 0.0
         steps["rerank"] = f"đã chấm {len(candidates)} đoạn" + (f" (không bỏ qua được: {why_not})" if why_not else "")
     else:
         # Dùng điểm cosine (tính cho cả đoạn chỉ BM25 tìm được) để so với ngưỡng vector
         top = [(i, float(index.embeddings[i] @ q_vec)) for i, _ in candidates[: opts.top_k_context]]
-        gate = opts.min_vector_score
+        gate, hard_gate = opts.min_vector_score, opts.hard_vector_score
         best_score = vector_hits[0][1] if vector_hits else 0.0
         steps["rerank"] = "tắt"
     lap("rerank")
@@ -524,8 +624,12 @@ def answer_question(
         route = "overview"
         top = [(overview_pos, best_score)]
 
-    # B4. Ghép ngữ cảnh: giữ thứ tự xuất hiện trong văn bản
-    context_chunks = [index.chunks[i] for i in sorted(i for i, _ in top)]
+    # B4. Ghép ngữ cảnh (giữ thứ tự xuất hiện trong văn bản), thêm đoạn kề cùng mục cho đủ ý
+    context_pos = _expand_context(index, top) if route == "retrieval" else sorted(i for i, _ in top)
+    context_chunks = [index.chunks[i] for i in context_pos]
+    # Độ tin cậy của bước tìm kiếm: "high" = vượt ngưỡng tin cậy; "medium" = chỉ vượt ngưỡng cứng
+    # (vẫn cho model đọc, nhưng nhắc model chặt hơn và giao diện khuyên người dùng mở nguồn kiểm tra)
+    confidence = "high" if best_score >= gate else "medium"
 
     debug = {
         "search_query": search_query,
@@ -534,6 +638,8 @@ def answer_question(
         "route": route,
         "best_score": round(best_score, 4),
         "gate": gate,
+        "hard_gate": hard_gate,
+        "confidence": confidence,
         "rejected_reason": None,
         "timings_ms": timings,
         "retrieved": [
@@ -545,6 +651,10 @@ def answer_question(
                 "score": round(s, 4),
             }
             for i, s in top
+        ],
+        # Những đoạn THỰC SỰ đưa cho model (gồm cả đoạn kề được thêm vào)
+        "context": [
+            {"chunk_id": c.id, "page_start": c.page_start, "page_end": c.page_end} for c in context_chunks
         ],
     }
 
@@ -632,15 +742,18 @@ def answer_question(
             short = "Tài liệu gồm: " + "; ".join(_pretty(t) for t in titles[:OUTLINE_MAX_ITEMS])
             return finish(answer, True, citations, history_answer=short)
 
-    # Lớp 1: chặn trước khi gọi LLM
-    if route == "retrieval" and best_score < gate:
+    # Lớp 1: chặn trước khi gọi LLM — chỉ chặn khi đoạn tốt nhất gần như không liên quan (ngưỡng cứng).
+    # Câu hỏi bằng lời lẽ đời thường thường có điểm rerank thấp dù đã tìm đúng đoạn, nên vùng giữa
+    # ngưỡng cứng và ngưỡng tin cậy vẫn cho model đọc; lớp 2 (model) và lớp 3 (kiểm chứng trích dẫn) chặn tiếp.
+    if route == "retrieval" and best_score < hard_gate:
         return refuse("low_retrieval_score")
 
     # B5. Sinh câu trả lời
     messages = (
         [{"role": "system", "content": prompts.SYSTEM_PROMPT}]
         + history
-        + [{"role": "user", "content": prompts.build_user_message(context_chunks, question, search_query)}]
+        + [{"role": "user", "content": prompts.build_user_message(
+            context_chunks, question, search_query, weak=confidence != "high")}]
     )
     result = llm.chat_json(messages, prompts.ANSWER_SCHEMA)
     lap("llm")
@@ -667,4 +780,12 @@ def answer_question(
     _attach_locations(index, citations)
     lap("locate")
 
-    return finish(result.get("answer", "").strip(), True, citations)
+    answer = (result.get("answer") or "").strip()
+    if not answer:
+        return refuse("model_not_found")
+    example = (result.get("example") or "").strip()
+    if example:
+        debug["example"] = example  # lưu trong debug để mở lại lịch sử vẫn thấy
+    out = finish(answer, True, citations)
+    out["example"] = example or None
+    return out

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DocShelf</title>
+    <meta name="description" content="Kệ tài liệu hỏi đáp bằng AI, có trích dẫn nguồn" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Cpath d='M10 8h9l5 5v11a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z' fill='white'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <!-- Đang kiểm tra đăng nhập -->
+    <div class="boot" id="boot"><div class="spinner"></div></div>
+
+    <div class="app" id="app" hidden>
+      <!-- ============================================================ Cột trái: sidebar (dựng bằng JS) -->
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <!-- ============================================================ Cột giữa: kệ / chat / cài đặt -->
+      <main class="main">
+        <!-- Thanh trên cùng: hiện khi sidebar bị ẩn (màn hình nhỏ, hoặc khi panel nguồn đang mở) -->
+        <header class="topbar">
+          <button class="icon-btn lg" id="top-shelf" title="Kệ tài liệu" aria-label="Kệ tài liệu" data-icon="shelf"></button>
+          <span class="topbar-title ellipsis" id="top-title">DocShelf</span>
+          <button class="icon-btn lg" id="top-settings" title="Cài đặt" aria-label="Cài đặt" data-icon="settings" hidden></button>
+          <button class="icon-btn lg" id="top-new-chat" title="Cuộc trò chuyện mới" aria-label="Cuộc trò chuyện mới" data-icon="plus" hidden></button>
+        </header>
+
+        <div class="chat-view" id="view"></div>
+      </main>
+
+      <!-- ============================================================ Cột phải: trang PDF nguồn -->
+      <aside class="source" id="source" hidden>
+        <header class="source-header">
+          <div class="source-titles">
+            <p class="strong ellipsis" id="source-doc"></p>
+            <p class="muted small ellipsis" id="source-section"></p>
+          </div>
+          <button class="icon-btn" id="source-prev" aria-label="Trang trước" data-icon="chevronLeft"></button>
+          <span class="page-count" id="source-page"></span>
+          <button class="icon-btn" id="source-next" aria-label="Trang sau" data-icon="chevronRight"></button>
+          <button class="icon-btn" id="source-close" aria-label="Đóng" data-icon="x"></button>
+        </header>
+
+        <div class="source-quote">
+          <p id="source-quote"></p>
+          <button class="link-btn" id="source-back" hidden></button>
+        </div>
+
+        <div class="source-body">
+          <div class="page-frame" id="page-frame">
+            <img id="page-img" alt="" />
+            <div id="page-marks"></div>
+            <div class="page-loading" id="page-loading"><div class="spinner"></div></div>
+          </div>
+          <p class="error-text" id="page-error" hidden>
+            Không tải được trang. Nếu tài liệu được upload trước khi có tính năng này, hãy upload lại.
+          </p>
+          <p class="muted small" id="page-nomark" hidden>Không xác định được vị trí chính xác của câu trích trên trang này.</p>
+        </div>
+      </aside>
+    </div>
+
+    <input type="file" id="file-input" accept="application/pdf,.pdf" hidden />
+
+    <script src="assets/common.js"></script>
+    <script src="assets/app.js"></script>
+  </body>
+</html>

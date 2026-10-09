@@ -11,6 +11,26 @@ DOT_LEADER_RE = re.compile(r"(\.\s?){5,}")          # ". . . . ." trong mục l�
 SECTION_NO_RE = re.compile(r"^\d{1,2}(\.\d{1,2})+\.?$")  # dòng chỉ có "1.1", "2.3.1"
 BULLET_RE = re.compile(r"^[Ì•▪►■◦]\s*")            # ký hiệu đầu dòng
 
+# Chữ số mũ (superscript): PDF chỉ vẽ chữ "0" nhỏ và cao hơn, text trích ra mất thông tin đó
+# -> "100⁰C" bị đọc thành "1000C", "x²" thành "x2". Đổi ký tự mũ sang dạng Unicode tương ứng,
+# và "⁰"/"ᵒ" đứng sau chữ số thành ký hiệu độ "°" (100°C, 30°). Đổi 1 ký tự -> 1 ký tự,
+# nên locate.py (tô màu trích dẫn) vẫn khớp đúng từng ký tự với trang PDF.
+SUPERSCRIPT_FLAG = 1  # span["flags"] bit 0 của PyMuPDF
+_SUP = str.maketrans("0123456789+-=()no", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿᵒ")
+SUP_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"  # số mũ / số chú thích: bỏ qua khi so khớp trích dẫn (verify.py, locate.py)
+
+
+def span_char(c: str, span: dict) -> str:
+    """Ký tự hiển thị của một ký tự trong span (đổi sang dạng mũ nếu span là chữ mũ)."""
+    return c.translate(_SUP) if span["flags"] & SUPERSCRIPT_FLAG else c
+
+
+def fix_degree(chars: list[str]) -> None:
+    """'⁰' hoặc 'ᵒ' ngay sau một chữ số -> '°' (sửa tại chỗ, giữ nguyên độ dài)."""
+    for k in range(1, len(chars)):
+        if chars[k] in ("⁰", "ᵒ") and chars[k - 1].isdecimal() and chars[k - 1] not in SUP_DIGITS:
+            chars[k] = "°"
+
 
 def _page_lines(page) -> list[str]:
     """Dựng lại từng dòng từ vị trí từng ký tự, tự chèn dấu cách khi có khoảng hở."""
@@ -23,7 +43,7 @@ def _page_lines(page) -> list[str]:
             for span in line["spans"]:
                 gap = span["size"] * GAP_RATIO
                 for ch in span["chars"]:
-                    c = ch["c"]
+                    c = span_char(ch["c"], span)
                     x0, _, x1, _ = ch["bbox"]
                     if (
                         prev_x1 is not None
@@ -35,6 +55,7 @@ def _page_lines(page) -> list[str]:
                         parts.append(" ")
                     parts.append(c)
                     prev_x1 = x1
+            fix_degree(parts)
             text = "".join(parts).strip()
             if text:
                 lines.append(text)
@@ -46,9 +67,15 @@ def _extract_pages(pdf_path: str) -> list[list[str]]:
         return [_page_lines(page) for page in doc]
 
 
+CHAPTER_LINE_RE = re.compile(r"^(chương|chapter)\s+([ivxlcdm]+|\d+)\b", re.IGNORECASE)
+
+
 def _is_toc_page(lines: list[str]) -> bool:
-    """Trang có từ 5 dòng ". . . . ." trở lên -> trang mục lục."""
-    return sum(1 for l in lines if DOT_LEADER_RE.search(l)) >= 5
+    """Trang mục lục: có từ 5 dòng ". . . . ." trở lên, HOẶC liệt kê từ 5 tiêu đề "Chương ..." trở lên
+    (mục lục không có dấu chấm dẫn; trang nội dung thường chỉ có 1 tiêu đề chương)."""
+    if sum(1 for l in lines if DOT_LEADER_RE.search(l)) >= 5:
+        return True
+    return sum(1 for l in lines if CHAPTER_LINE_RE.match(l.strip())) >= 5
 
 
 def _remove_repeated_lines(pages_lines: list[list[str]]) -> list[list[str]]:

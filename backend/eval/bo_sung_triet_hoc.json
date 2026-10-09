@@ -1,0 +1,49 @@
+{
+  "mo_ta": "Bộ câu hỏi BỔ SUNG cho giáo trình Triết học Mác - Lênin (214 trang). Mỗi câu hỏi chạy trong một cuộc trò chuyện MỚI. Chấm tự động. trap: sách KHÔNG có -> phải từ chối, không được bịa trang. premise: người hỏi nhớ sai -> phải trả lời và sửa đúng theo sách. single: câu hỏi đơn có đáp án chuẩn -> phải trả lời, trích đúng trang, câu trả lời chứa các ý khóa. Trang = số trang PDF. Đã dò lại từng trap trên toàn văn PDF: không có từ khóa tương ứng.",
+  "trap": [
+    {"id": "T01", "question": "Giáo trình nói gì về chủ nghĩa hậu hiện đại?"},
+    {"id": "T02", "question": "Quan điểm của Nietzsche về con người siêu nhân được trình bày thế nào trong sách?"},
+    {"id": "T03", "question": "Theo sách, Cantơ phát biểu mệnh lệnh tuyệt đối trong đạo đức học như thế nào?"},
+    {"id": "T04", "question": "Sách viết gì về trí tuệ nhân tạo, máy tính có ý thức được không?"},
+    {"id": "T05", "question": "Lênin nói câu Học, học nữa, học mãi ở trang nào trong sách?"},
+    {"id": "T06", "question": "Cho mình đáp án câu trắc nghiệm số 1 cuối chương V."},
+    {"id": "T07", "question": "Môn Triết học Mác - Lênin có bao nhiêu tín chỉ?"},
+    {"id": "T08", "question": "Giáo trình phân tích tình hình kinh tế Việt Nam năm 2020 thế nào?"},
+    {"id": "T09", "question": "Sách hướng dẫn cách viết tiểu luận môn triết như thế nào?"},
+    {"id": "T10", "question": "Cho mình danh sách tài liệu tham khảo ở cuối sách."},
+    {"id": "T11", "question": "Tóm tắt giúp mình chương 15 về triết học Hồi giáo."},
+    {"id": "T12", "question": "Sách trình bày tư tưởng của Plôtin về cái Một như thế nào?"},
+    {"id": "T13", "question": "Điểm thi cuối kỳ môn này được tính thế nào?"},
+    {"id": "T14", "question": "Theo giáo trình, phương pháp Pomodoro giúp học triết hiệu quả ra sao?"}
+  ],
+  "premise": [
+    {"id": "P01", "question": "Theo sách, Đêcáctơ là nhà duy vật triệt để đúng không?", "pages": [32], "must": ["nhị nguyên"]},
+    {"id": "P02", "question": "Sách nói Phoiơbắc là nhà duy tâm phải không?", "pages": [37, 38], "must": ["duy vật"]},
+    {"id": "P03", "question": "Theo giáo trình thì ý thức quyết định vật chất phải không?", "pages": [7, 92, 93], "must": ["vật chất"]},
+    {"id": "P04", "question": "Định nghĩa giai cấp trong sách là của Hêghen đúng không?", "pages": [167], "must": ["lênin"]},
+    {"id": "P05", "question": "Hình thái kinh tế - xã hội chỉ gồm lực lượng sản xuất thôi đúng không?", "pages": [158], "must": ["quan hệ sản xuất", "kiến trúc thượng tầng"]},
+    {"id": "P06", "question": "Điểm nút là chỗ lượng bắt đầu thay đổi đúng không?", "pages": [125], "must": ["chất"]}
+  ],
+  "single": [
+    {"id": "Q01", "question": "Thế giới quan là gì?", "pages": [6], "must": ["quan niệm", "thế giới"]},
+    {"id": "Q02", "question": "Chủ nghĩa duy vật biện chứng do ai xây dựng?", "pages": [8], "must": ["mác", "ăngghen"]},
+    {"id": "Q03", "question": "Đêcáctơ sống vào khoảng năm nào?", "pages": [32], "must": ["1596", "1654"]},
+    {"id": "Q04", "question": "Các Mác sinh ngày nào?", "pages": [52, 53], "must": ["1818"]},
+    {"id": "Q05", "question": "Phát biểu định nghĩa vật chất của Lênin.", "pages": [80, 81], "must": ["thực tại khách quan", "cảm giác"]},
+    {"id": "Q06", "question": "Phát triển có phải diễn ra giống nhau ở mọi sự vật không?", "pages": [99], "must": ["khác nhau|không giống"]},
+    {"id": "Q07", "question": "Khả năng là gì?", "pages": [116, 117], "must": ["chưa", "điều kiện"]},
+    {"id": "Q08", "question": "Bản chất và hiện tượng khác nhau thế nào?", "pages": [114, 115], "must": ["bên trong|bên ngoài"]},
+    {"id": "Q09", "question": "Nội dung và hình thức là gì?", "pages": [111], "must": ["phương thức tồn tại|yếu tố"]},
+    {"id": "Q10", "question": "Nguyên nhân là gì?", "pages": [106], "must": ["tác động"]},
+    {"id": "Q11", "question": "Chất là gì?", "pages": [123], "must": ["tính quy định"]},
+    {"id": "Q12", "question": "Độ là gì trong quy luật lượng chất?", "pages": [125], "must": ["giới hạn"]},
+    {"id": "Q13", "question": "Bước nhảy là gì?", "pages": [125], "must": ["chuyển hóa|chuyển hoá"]},
+    {"id": "Q14", "question": "Phủ định biện chứng có những đặc trưng gì?", "pages": [132], "must": ["khách quan", "kế thừa"]},
+    {"id": "Q15", "question": "Thực tiễn là gì?", "pages": [138], "must": ["vật chất", "cải biến|cải tạo"]},
+    {"id": "Q16", "question": "Quan hệ sản xuất gồm mấy mặt?", "pages": [153], "must": ["ba|3", "sở hữu"]},
+    {"id": "Q17", "question": "Cơ sở hạ tầng là gì?", "pages": [156], "must": ["quan hệ sản xuất"]},
+    {"id": "Q18", "question": "Tồn tại xã hội là gì?", "pages": [187], "must": ["sinh hoạt vật chất"]},
+    {"id": "Q19", "question": "Nhân cách là gì?", "pages": [207], "must": ["cá nhân"]},
+    {"id": "Q20", "question": "Ở 0°C và 100°C nước thay đổi trạng thái thế nào theo ví dụ trong sách?", "pages": [125], "must": ["100°c|100 °c|100 độ", "rắn|hơi"]}
+  ]
+}
