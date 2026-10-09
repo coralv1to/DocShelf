@@ -1,0 +1,19 @@
+fastapi
+uvicorn[standard]
+python-multipart
+python-dotenv
+ollama
+pymupdf
+numpy
+rapidfuzz
+rank-bm25
+underthesea
+sentence-transformers
+
+# Database + đăng nhập
+sqlalchemy
+psycopg[binary]
+pgvector
+alembic
+bcrypt
+pyjwt

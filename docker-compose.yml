@@ -1,0 +1,29 @@
+# Postgres + pgvector cho DocShelf (chỉ dùng ở máy dev)
+# Chạy:  docker compose up -d      Dừng:  docker compose down
+name: docshelf   # cố định tên project: đổi tên thư mục không tạo volume mới
+
+services:
+  db:
+    image: pgvector/pgvector:pg17       # Postgres 17 có sẵn extension pgvector
+    container_name: docshelf-db
+    restart: unless-stopped             # mở Docker Desktop là DB tự chạy
+    environment:
+      POSTGRES_USER: docshelf
+      # Mật khẩu lấy từ file .env ở thư mục gốc (cạnh file này) nếu có, không thì dùng mật khẩu dev.
+      # Production: tạo file .env với POSTGRES_PASSWORD=<mật khẩu mạnh> (xem docs/02)
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-docshelf_dev_123}
+      POSTGRES_DB: docshelf
+    ports:
+      # 127.0.0.1: chỉ máy này kết nối được, máy khác trong mạng LAN/Internet không vào được DB.
+      # Cổng 5433 trên máy -> 5432 trong container (tránh đụng Postgres khác nếu đã cài)
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # dữ liệu nằm trong volume, xóa container không mất
+      - ./db/init:/docker-entrypoint-initdb.d:ro # script chạy 1 lần khi tạo DB lần đầu
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docshelf -d docshelf"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:

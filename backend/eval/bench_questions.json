@@ -1,0 +1,231 @@
+{
+  "document": "Stanford CS229 Super VIP Cheatsheet: Học máy (bản tiếng Việt, 17 trang)",
+  "single": [
+    {
+      "id": "S01",
+      "question": "Dropout là gì?",
+      "type": "in_doc",
+      "expected_page": 9
+    },
+    {
+      "id": "S02",
+      "question": "LSTM tránh được vấn đề gì?",
+      "type": "in_doc",
+      "expected_page": 10
+    },
+    {
+      "id": "S03",
+      "question": "Tham số k trong k-NN ảnh hưởng thế nào đến bias và phương sai?",
+      "type": "in_doc",
+      "expected_page": 5
+    },
+    {
+      "id": "S04",
+      "question": "Bước đầu tiên của thuật toán PCA là gì?",
+      "type": "in_doc",
+      "expected_page": 7
+    },
+    {
+      "id": "S05",
+      "question": "Tiến trình quyết định Markov gồm những thành phần nào?",
+      "type": "in_doc",
+      "expected_page": 10
+    },
+    {
+      "id": "S06",
+      "question": "Phương thức điều chỉnh tốc độ học phổ biến nhất là gì?",
+      "type": "in_doc",
+      "expected_page": 9
+    },
+    {
+      "id": "S07",
+      "question": "Có những loại cross-validation nào?",
+      "type": "in_doc",
+      "expected_page": 12
+    },
+    {
+      "id": "S08",
+      "question": "Hàm sigmoid còn được gọi là gì?",
+      "type": "in_doc",
+      "expected_page": 3
+    },
+    {
+      "id": "S09",
+      "question": "Stochastic gradient descent khác batch gradient descent thế nào?",
+      "type": "in_doc",
+      "expected_page": 2
+    },
+    {
+      "id": "O01",
+      "question": "Tài liệu này nói về chủ đề gì?",
+      "type": "overview"
+    },
+    {
+      "id": "O02",
+      "question": "Tài liệu gồm những phần chính nào?",
+      "type": "overview"
+    },
+    {
+      "id": "X01",
+      "question": "Giá vàng hôm nay bao nhiêu?",
+      "type": "out_of_scope"
+    },
+    {
+      "id": "X02",
+      "question": "Viết cho tôi một bài thơ về mùa thu",
+      "type": "out_of_scope"
+    },
+    {
+      "id": "T01",
+      "question": "GRU khác LSTM thế nào?",
+      "type": "trap"
+    },
+    {
+      "id": "T02",
+      "question": "Nên đặt xác suất dropout p bằng bao nhiêu?",
+      "type": "trap"
+    },
+    {
+      "id": "T03",
+      "question": "Transformer dùng cơ chế attention như thế nào?",
+      "type": "trap"
+    },
+    {
+      "id": "T04",
+      "question": "Tài liệu khuyên dùng PyTorch hay TensorFlow?",
+      "type": "trap"
+    },
+    {
+      "id": "L01",
+      "question": "Dropout ở trang nào?",
+      "type": "in_doc",
+      "expected_page": 9
+    },
+    {
+      "id": "L02",
+      "question": "Hàm sigmoid nằm ở trang nào?",
+      "type": "in_doc",
+      "expected_page": 3
+    },
+    {
+      "id": "L03",
+      "question": "PCA được trình bày ở trang nào?",
+      "type": "in_doc",
+      "expected_page": 7
+    },
+    {
+      "id": "L04",
+      "question": "k-NN ở trang nào?",
+      "type": "in_doc",
+      "expected_page": 5
+    },
+    {
+      "id": "LT1",
+      "question": "Transformer ở trang nào?",
+      "type": "trap"
+    }
+  ],
+  "chains": [
+    {
+      "id": "C1",
+      "name": "Đại từ 'nó'",
+      "turns": [
+        {
+          "question": "Dropout là gì?",
+          "expect": "answer",
+          "expected_page": 9
+        },
+        {
+          "question": "Nó hoạt động như thế nào?",
+          "expect": "answer",
+          "expected_page": 9,
+          "query_must_contain": [
+            "dropout"
+          ]
+        },
+        {
+          "question": "Xác suất giữ lại một neural là bao nhiêu?",
+          "expect": "answer",
+          "expected_page": 9,
+          "query_must_contain": [
+            "dropout"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C2",
+      "name": "Câu hỏi cụt",
+      "turns": [
+        {
+          "question": "k-NN là gì?",
+          "expect": "answer",
+          "expected_page": 5
+        },
+        {
+          "question": "Tăng k thì sao?",
+          "expect": "answer",
+          "expected_page": 5,
+          "query_must_contain": [
+            "k-nn|k-nearest|láng giềng"
+          ]
+        },
+        {
+          "question": "Còn giảm k?",
+          "expect": "answer",
+          "expected_page": 5,
+          "query_must_contain": [
+            "k-nn|k-nearest|láng giềng"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C3",
+      "name": "Chuyển chủ đề giữa chừng",
+      "turns": [
+        {
+          "question": "LSTM tránh được vấn đề gì?",
+          "expect": "answer",
+          "expected_page": 10
+        },
+        {
+          "question": "Bằng cách nào?",
+          "expect": "answer",
+          "expected_page": 10,
+          "query_must_contain": [
+            "lstm"
+          ]
+        },
+        {
+          "question": "Tiến trình quyết định Markov gồm những gì?",
+          "expect": "answer",
+          "expected_page": 10,
+          "query_must_not_contain": [
+            "lstm"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C4",
+      "name": "Bẫy trong hội thoại",
+      "turns": [
+        {
+          "question": "Tốc độ học là gì?",
+          "expect": "answer",
+          "expected_page": 9
+        },
+        {
+          "question": "Phương thức phổ biến nhất để điều chỉnh nó là gì?",
+          "expect": "answer",
+          "expected_page": 9
+        },
+        {
+          "question": "Ai đề xuất phương thức đó và vào năm nào?",
+          "expect": "refuse"
+        }
+      ]
+    }
+  ]
+}

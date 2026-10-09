@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+backend/.venv/
+
+# Bí mật / cấu hình máy
+.env
+!.env.example
+
+# Dữ liệu sinh ra khi chạy
+backend/data/
+backend/eval/bench_log.txt
+backend/tools/*.png
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/next-env.d.ts
+
+# Khác
+_to_delete/
+.DS_Store
+Thumbs.db
